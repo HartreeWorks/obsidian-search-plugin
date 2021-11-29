@@ -1,6 +1,8 @@
-import esbuild from "esbuild";
-import process from "process";
-import builtins from 'builtin-modules'
+// import esbuild from "esbuild";
+const esbuild = require('esbuild')
+const process = require("process");
+const builtins = require('builtin-modules');
+// import builtins from 'builtin-modules'
 
 const banner =
 `/*
