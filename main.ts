@@ -119,8 +119,8 @@ export default class MyPlugin extends Plugin {
 	generateLinks (files: TFile[]): string {
 		let str = '\n';
 		for (let i = 0; i < files.length; i++) {
-			const path = files[i].path;
-			str = `${str} \n[${path}](${path})`;
+			const path = files[i].path.replace('.md', '');
+			str = `${str} \n[[${path}]]`;
 		}
 		str = str + '\n\n';
 		return str;
