@@ -1,8 +1,10 @@
-// import esbuild from "esbuild";
+
 const esbuild = require('esbuild')
 const process = require("process");
 const builtins = require('builtin-modules');
-// import builtins from 'builtin-modules'
+// import process from 'process';
+// import esbuild from "esbuild";
+// import builtins from 'builtin-modules';
 
 const banner =
 `/*
