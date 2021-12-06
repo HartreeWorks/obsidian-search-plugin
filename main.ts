@@ -3,11 +3,13 @@ import {
 	Plugin,
 	TFile
 } from 'obsidian';
+import {Arr} from "tern";
 
 
 export default class MyPlugin extends Plugin {
 
 	async onload() {
+
 
 		const {vault} = this.app;
 
@@ -15,19 +17,20 @@ export default class MyPlugin extends Plugin {
 		 * Language:
 		 * title contains/starts_with/ends_with <exp>;;
 		 * order_by title/mtime asc/desc;;
+		 * tag <exp>;;
 		 * */
 
 		this.addCommand({
 			id: "lister",
 			name: "Lister",
 			callback: async () => {
-				this.lister();
+				await this.lister();
 			},
 		});
 
 		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('links-coming-in', 'Lister', (evt: MouseEvent) => {
-			this.lister();
+		const ribbonIconEl = this.addRibbonIcon('links-coming-in', 'Lister', async (evt: MouseEvent) => {
+			await this.lister();
 		});
 
 
@@ -38,10 +41,12 @@ export default class MyPlugin extends Plugin {
 	onunload() {}
 
 	async lister() {
+
 		const {vault, workspace} = this.app;
 
 		const file = workspace.getActiveFile();
 		const contents = await vault.cachedRead(file);
+
 
 		if (contents.indexOf('%%lister') === -1 || contents.indexOf('/lister%%') === -1) {
 			new Notice('No lister command found');
@@ -56,34 +61,73 @@ export default class MyPlugin extends Plugin {
 		const commands = commandStr.split(';;');
 		let files = vault.getFiles();
 
-		const filteredFiles = this.process(files, commands);
+
+		const filteredFiles = await this.process(files, commands);
 
 		const prefixWithCommand = contents.substring(0, contents.indexOf('/lister%%') + 10);
-		const suffixAfterCommand = contents.substring(contents.indexOf('/lister%%') + 10);
 
-		const newContent = prefixWithCommand + this.generateLinks(filteredFiles) + suffixAfterCommand;
+		let suffixAfterCommandAndList = null;
+		if (contents.indexOf('%%list_end%%') !== -1) {
+			suffixAfterCommandAndList  = contents.substring(contents.indexOf('%%list_end%%') + 12);
+		} else {
+			suffixAfterCommandAndList  = contents.substring(contents.indexOf('/lister%%') + 10);
+		}
+
+		const newContent = prefixWithCommand +
+			this.generateLinks(filteredFiles) +
+			`%%list_end%%` +
+			suffixAfterCommandAndList;
 
 		workspace.activeLeaf.view.editor?.cm.setValue(newContent);
+
 	}
 
-	process(files: TFile[], commands: any) {
+	async process(files: TFile[], commands: any) {
 		let filteredFiles = [...files];
-		commands.forEach((command: string) => {
+		for (let command of commands) {
 			command = command.trim();
 			if(!command) {
-				return;
+				continue;
 			}
-			const [subject, operator, $2] = command.split(" ");
+			const [subject, $1, $2] = command.split(" ");
 			switch (subject) {
 				case 'title':
-					filteredFiles = this.filter(filteredFiles, operator, $2);
+					//$1 => operator (contains/starts_with/ends_with)
+					filteredFiles = this.filter(filteredFiles, $1, $2);
 					break;
 				case 'order_by':
-					filteredFiles = this.sort(filteredFiles, operator, !$2 || $2 === 'asc');
+					//$1 => operator (title/mtime)
+					filteredFiles = this.sort(filteredFiles, $1, !$2 || $2 === 'asc');
+					break;
+				case 'tag':
+					//$1 => comma separated tags
+					const tags = $1.split(',');
+					filteredFiles = await this.searchTags(filteredFiles, tags);
 					break;
 			}
-		});
+		}
 		return filteredFiles;
+	}
+
+	/**
+	 * Doing for 1 tag for now. But support can be added for multiple tags
+	 * */
+	findTagsInContent(content: string, tags: Array<string>) {
+		let pattern = new RegExp(`#${tags[0]}`);
+		return !!pattern.test(content);
+	}
+
+	async searchTags(files: TFile[], tags: Array<string> = []) {
+		const {vault} = this.app;
+		const fileContents: string[] = await Promise.all(files.map(file => vault.cachedRead(file)));
+
+		const result: Array<TFile> = [];
+		fileContents.forEach((content, index) => {
+			if (this.findTagsInContent(content, tags)) {
+				result.push(files[index]);
+			}
+		});
+		return result;
 	}
 
 	sort(files: TFile[], operator: string, asc: boolean): TFile[] {
